@@ -2,11 +2,10 @@ import uuid
 from qdrant_client import QdrantClient, models
 import config
 
-qdrant_client = QdrantClient(
-    url=config.QDRANT_URL,
-    api_key=config.QDRANT_API_KEY,
-)
 
+qdrant_client = QdrantClient(":memory:")
+
+# qdrant_client = QdrantClient(url=config.QDRANT_URL, api_key=config.QDRANT_API_KEY)
 
 def get_or_create_collection(collection_name: str, vector_size: int):
     """

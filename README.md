@@ -36,8 +36,7 @@ I used [libimobiledevice](https://github.com/libimobiledevice/libimobiledevice) 
    idevicebackup2 backup ~/iphone_backup
    ```
 
-7. Locate the `Manifest.db` file inside your backup folder. This database tracks files in the backup. It should be at:  
-   `~/iphone_backup/Manifest.db`
+7. Locate the `Manifest.db` file inside your backup folder. This database tracks file locations in the backup.
 
 8. Query `Manifest.db` to find the fileID and relative path of `sms.db`  
    ``` bash

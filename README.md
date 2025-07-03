@@ -78,3 +78,47 @@ I used [libimobiledevice](https://github.com/libimobiledevice/libimobiledevice) 
 
 11. You now have a full database of your iPhone texts! This can be used to create the vector store. Feel free to remove your backup directory as you no longer need it.
 
+## SMS Database Transformations for Non-iPhone Sources
+
+The provided Python utility is designed to work with an `sms.db` file that closely resembles the schema found on iOS devices. If your SMS data comes from an Android phone, a different mobile platform, or a custom export, you will likely need to perform some database transformations to make it compatible.
+
+### Required `sms.db` Schema
+
+To ensure compatibility with the utility, your SQLite `sms.db` file must contain the following tables and columns:
+
+1.  **`message` table**:
+    * `ROWID`: A unique integer identifier for each message.
+    * `text`: The content of the message (TEXT).
+    * `is_from_me`: An integer (INTEGER) where `0` indicates an incoming message and `1` indicates an outgoing message.
+    * `date`: A timestamp (INTEGER), preferably in Unix epoch seconds, or a consistent integer value that allows for accurate chronological sorting.
+
+2.  **`handle` table**:
+    * `ROWID`: A unique integer identifier for each handle (contact).
+    * `id`: The contact's identifier (TEXT), such as a phone number (e.g., `+15551234567`) or an email address.
+
+3.  **Relationship**:
+    * The `message.handle_id` column must be an integer that links to the `handle.ROWID` of the corresponding contact.
+
+**Example SQL to create the required tables:**
+
+```sql
+CREATE TABLE handle (
+    ROWID INTEGER PRIMARY KEY AUTOINCREMENT,
+    id TEXT UNIQUE NOT NULL
+);
+
+CREATE TABLE message (
+    ROWID INTEGER PRIMARY KEY AUTOINCREMENT,
+    text TEXT,
+    is_from_me INTEGER NOT NULL, -- 0 for incoming, 1 for outgoing
+    date INTEGER,               -- Unix epoch seconds (or other consistent sortable integer)
+    handle_id INTEGER,
+    FOREIGN KEY (handle_id) REFERENCES handle(ROWID)
+);
+```
+
+### How to Transform Your Data
+
+You will need to export your SMS data from its original source (e.g., using an Android SMS backup app, or a custom script) and then write your own script (e.g., in Python) to read this exported data and insert it into an SQLite database that conforms to the schema described above.
+
+Once you have your transformed `sms.db` file created with the correct schema and populated data, you can then use this file as the `sms_db_path` parameter in the `create_qdrant_sms_store` function.

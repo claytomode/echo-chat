@@ -10,3 +10,11 @@ dependencies = [
     "python-dotenv>=1.1.1",
     "qdrant-client>=1.14.3",
 ]
+[tool.ruff]
+line-length = 100
+target-version = "py313"
+select = [
+    "ALL", # include all the rules, including new ones
+]
+[tool.ruff.format]
+skip-magic-trailing-comma = false

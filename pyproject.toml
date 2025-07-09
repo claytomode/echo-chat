@@ -5,6 +5,7 @@ description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [
+    "fastembed-gpu>=0.7.1",
     "python-dotenv>=1.1.1",
     "qdrant-client>=1.14.3",
     "sentence-transformers>=5.0.0",
@@ -22,6 +23,9 @@ select = [
 ignore = [
     "PLR0913",
     "T201",
+    "COM812",
+    "DTZ001",
+    "PLR0915"
 ]
 [tool.ruff.format]
 skip-magic-trailing-comma = false

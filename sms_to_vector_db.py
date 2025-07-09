@@ -1,6 +1,7 @@
 import sqlite3
 from datetime import datetime, timedelta
 
+from fastembed import SparseTextEmbedding
 from qdrant_client import QdrantClient, models
 from sentence_transformers import SentenceTransformer
 from tqdm import tqdm
@@ -45,8 +46,10 @@ def sms_db_to_qdrant(
     qdrant_grpc_port: int = 6334,
     collection_name: str = 'echo_chat',
     sentence_transformer_model_name: str = 'BAAI/bge-large-en-v1.5',
+    sparse_model_name: str = 'prithivida/Splade_PP_en_v1',
     conversation_gap_minutes: int = 30,
     batch_size: int = 256,
+    sparse_batch_size: int = 16,
     *,
     recreate_collection: bool = True,
 ):
@@ -75,7 +78,8 @@ def sms_db_to_qdrant(
     print(f'fetched {len(raw_messages)} raw messages.')
     if not raw_messages:
         conn.close()
-        raise ValueError(f'no messages found for {target_phone_number} in {sms_db_path}')
+        msg = f'no messages found for {target_phone_number} in {sms_db_path}'
+        raise ValueError(msg)
 
     coredata_epoch = datetime(2001, 1, 1, tzinfo=None)
     processed_messages = []
@@ -105,39 +109,36 @@ def sms_db_to_qdrant(
     conn.close()
     print(f'processed {len(processed_messages)} messages and assigned conversation ids.')
 
-    model = SentenceTransformer(sentence_transformer_model_name)
+    model = SentenceTransformer(sentence_transformer_model_name, device='cuda')
+    sparse_model = SparseTextEmbedding(model_name=sparse_model_name, cuda=True)
     print('sentence transformer model loaded.')
+    print('sparse model loaded.')
 
     client = QdrantClient(host=qdrant_host, port=qdrant_port, grpc_port=qdrant_grpc_port)
     print('connected to qdrant client.')
-
+    sparse_vector_params = models.SparseVectorParams(index=models.SparseIndexParams(on_disk=False))
+    hnsw_config_initial = models.HnswConfigDiff(m=0)
     dense_vector_params = models.VectorParams(
-        size=model.get_sentence_embedding_dimension(), distance=models.Distance.COSINE
+        size=model.get_sentence_embedding_dimension() or 0,
+        distance=models.Distance.COSINE,
+        hnsw_config=hnsw_config_initial,
+        on_disk=True,
     )
-    sparse_vector_params = models.SparseVectorParams()
 
     if recreate_collection:
         if client.collection_exists(collection_name):
             client.delete_collection(collection_name=collection_name)
         client.create_collection(
             collection_name=collection_name,
-            vectors_config={
-                'dense': dense_vector_params,
-            },
-            sparse_vectors_config={
-                'sparse': sparse_vector_params,
-            },
+            vectors_config={'dense': dense_vector_params},
+            sparse_vectors_config={'sparse': sparse_vector_params},
         )
         print(f"collection '{collection_name}' recreated/initialized.")
     elif not client.collection_exists(collection_name):
         client.create_collection(
             collection_name=collection_name,
-            vectors_config={
-                'dense': dense_vector_params,
-            },
-            sparse_vectors_config={
-                'sparse': sparse_vector_params,
-            },
+            vectors_config={'dense': dense_vector_params},
+            sparse_vectors_config={'sparse': sparse_vector_params},
         )
         print(f"collection '{collection_name}' created/initialized.")
     else:
@@ -145,7 +146,8 @@ def sms_db_to_qdrant(
 
     total_messages = len(processed_messages)
     print(
-        f'starting embedding and upsert for {total_messages} messages in batches of {batch_size}.'
+        f'starting embedding and upsert for {total_messages} messages in batches of {batch_size} '
+        f'(dense/upsert) and sub-batches of {sparse_batch_size} (sparse).'
     )
 
     for i in tqdm(range(0, total_messages, batch_size), desc='Ingesting messages to Qdrant'):
@@ -154,18 +156,29 @@ def sms_db_to_qdrant(
 
         batch_embeddings = model.encode(batch_texts).tolist()
 
+        all_sparse_embeddings_in_batch = []
+        for j in range(0, len(batch_texts), sparse_batch_size):  # Use sparse_batch_size here
+            sub_batch_texts = batch_texts[j : j + sparse_batch_size]
+            all_sparse_embeddings_in_batch.extend(list(sparse_model.embed(sub_batch_texts)))
+
         points_to_upsert = []
         for j, msg_data in enumerate(batch_messages):
             point_id = msg_data['id']
             dense_vector = batch_embeddings[j]
+            sparse_embedding = all_sparse_embeddings_in_batch[j]
 
             payload = {
                 'text': msg_data['text'],
                 'conversation_id': msg_data['conversation_id'],
-                'is_from_me': msg_data['is_from_me'],
+                'is_from_me': bool(msg_data['is_from_me']),
                 'date': msg_data['date'],
                 'timestamp_seconds': msg_data['timestamp_seconds'],
             }
+
+            sparse_vector = models.SparseVector(
+                indices=sparse_embedding.indices.tolist(),
+                values=sparse_embedding.values.tolist(),
+            )
 
             points_to_upsert.append(
                 models.PointStruct(
@@ -173,35 +186,37 @@ def sms_db_to_qdrant(
                     payload=payload,
                     vector={
                         'dense': dense_vector,
+                        'sparse': sparse_vector,
                     },
                 ),
             )
 
         client.upsert(collection_name=collection_name, points=points_to_upsert, wait=True)
 
+    print('\nmessage ingestion complete.')
+
+    print(f"Re-enabling HNSW indexing for '{collection_name}'...")
+    client.update_collection(
+        collection_name=collection_name,
+        vectors_config={
+            'dense': models.VectorParamsDiff(
+                hnsw_config=models.HnswConfigDiff(
+                    m=16,
+                    ef_construct=100,
+                ),
+            ),
+        },
+    )
+    print(
+        f"HNSW indexing re-enabled for '{collection_name}'. "
+        'Qdrant will now build the index in background.'
+    )
+
 
 if __name__ == '__main__':
-    SMS_DB_PATH = ''
-    HER_PHONE_NUMBER = ''
-
-    QDRANT_HOST = 'localhost'
-    QDRANT_PORT = 6333
-    QDRANT_GRPC_PORT = 6334
-
-    SENTENCE_TRANSFORMER_MODEL = 'BAAI/bge-large-en-v1.5'
-    CONVERSATION_GAP_MINUTES = 30
-    BATCH_SIZE = 256
-    RECREATE_COLLECTION = True
-
     sms_db_to_qdrant(
-        sms_db_path=SMS_DB_PATH,
-        target_phone_number=HER_PHONE_NUMBER,
-        qdrant_host=QDRANT_HOST,
-        qdrant_port=QDRANT_PORT,
-        qdrant_grpc_port=QDRANT_GRPC_PORT,
-        sentence_transformer_model_name=SENTENCE_TRANSFORMER_MODEL,
-        conversation_gap_minutes=CONVERSATION_GAP_MINUTES,
-        batch_size=BATCH_SIZE,
-        recreate_collection=RECREATE_COLLECTION,
+        sms_db_path='',
+        target_phone_number='',
+        recreate_collection=False,
     )
     print('\nmessage ingestion complete.')

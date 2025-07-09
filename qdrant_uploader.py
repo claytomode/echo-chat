@@ -23,8 +23,9 @@ from config import (
 
 def upload_knowledge_base_to_qdrant(
     knowledge_base_db_path: str = 'knowledge_base.db',
-    qdrant_port: int = None,  # Not directly used if QDRANT_URL is full URL
-    qdrant_grpc_port: int = 6334,  # Usually from Qdrant, can be defaulted
+    qdrant_url: str = 'localhost',
+    qdrant_port: int | None = 6333,  # Not directly used if QDRANT_URL is full URL
+    qdrant_grpc_port: int | None = 6334,  # Usually from Qdrant, can be defaulted
     collection_name: str = QDRANT_COLLECTION_NAME,  # From config
     sentence_transformer_model_name: str = SENTENCE_TRANSFORMER_MODEL_NAME,  # From config
     sparse_model_name: str = SPARSE_MODEL_NAME,  # From config
@@ -76,10 +77,8 @@ def upload_knowledge_base_to_qdrant(
         print(f'Could not load SparseTextEmbedding model on CUDA, trying CPU: {e}')
         sparse_model = SparseTextEmbedding(model_name=sparse_model_name, cuda=False)
 
-    # Initialize Qdrant Client
-    # Using QDRANT_URL directly for host and port is preferred if it's a full URL
     client = QdrantClient(
-        url=QDRANT_URL, port=qdrant_port, grpc_port=qdrant_grpc_port, api_key=QDRANT_API_KEY
+        url=qdrant_url, port=qdrant_port, grpc_port=qdrant_grpc_port, api_key=QDRANT_API_KEY
     )
     print(f'Connected to Qdrant client at {QDRANT_URL}.')
 
@@ -191,14 +190,6 @@ def upload_knowledge_base_to_qdrant(
 
 
 if __name__ == '__main__':
-    # Make sure your .env file is set up and Qdrant Docker is running
-    # You should run `sms_to_knowledge_base.py` first to populate knowledge_base.db
-    # before running this script.
-
-    # Set USE_CUDA=true in your environment variables if you want to use GPU for embeddings.
-    # export USE_CUDA=true # On Linux/macOS
-    # $env:USE_CUDA="true" # On Windows (PowerShell)
-
     try:
         upload_knowledge_base_to_qdrant(
             knowledge_base_db_path='knowledge_base.db',

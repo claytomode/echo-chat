@@ -12,3 +12,4 @@ wheels/
 # env
 .env
 knowledge_base.db
+create_facts.py

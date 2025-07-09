@@ -6,6 +6,7 @@ readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [
     "fastembed-gpu>=0.7.1",
+    "google-adk>=1.5.0",
     "python-dotenv>=1.1.1",
     "qdrant-client>=1.14.3",
     "sentence-transformers>=5.0.0",

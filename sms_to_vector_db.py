@@ -1,3 +1,4 @@
+"""Convert sms.db to a Qdrant vector store."""
 import sqlite3
 from datetime import datetime, timedelta
 
@@ -52,7 +53,8 @@ def sms_db_to_qdrant(
     sparse_batch_size: int = 16,
     *,
     recreate_collection: bool = True,
-):
+) -> None:
+    """Convert sms.db to a Qdrant vector store."""
     conn = sqlite3.connect(sms_db_path)
     cursor = conn.cursor()
     print('connected to sms database.')

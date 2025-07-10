@@ -11,5 +11,7 @@ wheels/
 
 # env
 .env
+
 knowledge_base.db
 facts_output.txt
+monthly_timelines

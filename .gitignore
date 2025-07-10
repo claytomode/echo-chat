@@ -15,3 +15,5 @@ wheels/
 knowledge_base.db
 facts_output.txt
 monthly_timelines
+master_timeline.md
+digest.txt

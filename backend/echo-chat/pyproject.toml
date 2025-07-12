@@ -26,7 +26,7 @@ ignore = [
     "T201",
     "COM812",
     "DTZ001",
-    "PLR0915"
+
 ]
 [tool.ruff.format]
 skip-magic-trailing-comma = false

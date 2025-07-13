@@ -1,4 +1,8 @@
-* WIP AI chat that uses your phone's messages as memory
+# WIP AI chat that uses your phone's messages as memory
+
+
+---
+
 
 ## Vector Store
 

@@ -1,3 +1,5 @@
+* WIP AI chat that uses your phone's messages as memory
+
 ## Vector Store
 
 To create the vector store, you must have the `sms.db` SQLite database.
